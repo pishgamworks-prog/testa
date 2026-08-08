@@ -1,0 +1,2 @@
+Temporary trigger for downloading public ASR tools only.
+No user audio or meeting content is uploaded.
