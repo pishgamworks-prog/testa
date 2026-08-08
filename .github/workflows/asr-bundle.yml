@@ -1,0 +1,37 @@
+name: ASR Bundle
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install -y cmake build-essential curl
+      - name: Build whisper.cpp
+        run: |
+          set -euxo pipefail
+          git clone --depth 1 --branch v1.8.3 https://github.com/ggml-org/whisper.cpp.git
+          cmake -S whisper.cpp -B whisper.cpp/build -DWHISPER_BUILD_EXAMPLES=ON -DGGML_NATIVE=OFF
+          cmake --build whisper.cpp/build --config Release -j2
+          mkdir -p bundle
+          cp whisper.cpp/build/bin/whisper-cli bundle/
+          find whisper.cpp/build -type f \( -name 'libwhisper.so*' -o -name 'libggml*.so*' \) -exec cp -a {} bundle/ \;
+      - name: Download multilingual model
+        run: |
+          set -euxo pipefail
+          curl -L --fail --retry 5 --retry-delay 10 \
+            -o bundle/ggml-small-q5_1.bin \
+            https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small-q5_1.bin
+          test $(stat -c%s bundle/ggml-small-q5_1.bin) -gt 180000000
+          tar -czf asr-bundle.tar.gz -C bundle .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: asr-bundle
+          path: asr-bundle.tar.gz
+          retention-days: 1
+          if-no-files-found: error
